@@ -21,7 +21,7 @@ pub const ASSETS_DIR: &str = "./test_assets";
 pub const PARAMS_DIR: &str = "./test_params";
 
 pub fn parse_trace_path_from_mode(mode: &str) -> &'static str {
-    let trace_path = match mode {
+    match mode {
         "empty" => "./tests/traces/bridge/01.json",
         "greeter" => "./tests/traces/greeter/setValue.json",
         "single" => "./tests/traces/erc20/1_transfer.json",
@@ -32,9 +32,7 @@ pub fn parse_trace_path_from_mode(mode: &str) -> &'static str {
         "nft" => "./tests/traces/nft/mint.json",
         "sushi" => "./tests/traces/sushi/chef-withdraw.json",
         _ => "./tests/extra_traces/batch_495/chunk_495/block_8802.json",
-    };
-    log::info!("using mode {:?}, testing with {:?}", mode, trace_path);
-    trace_path
+    }
 }
 
 pub fn load_block_traces_for_test() -> (Vec<String>, Vec<BlockTrace>) {
@@ -44,12 +42,12 @@ pub fn load_block_traces_for_test() -> (Vec<String>, Vec<BlockTrace>) {
         let mode = read_env_var("MODE", "default".to_string());
         if mode.to_lowercase() == "batch" || mode.to_lowercase() == "pack" {
             (1..=20)
-                .map(|i| format!("tests/traces/bridge/{i:02}.json"))
+                .map(|i| format!("tests/traces/bridge/{:02}.json", i))
                 .collect()
         } else {
             vec![parse_trace_path_from_mode(&mode).to_string()]
         }
-    } else if !std::fs::metadata(&trace_path).unwrap().is_dir() {
+    } else if !std::fs::metadata(&trace_path).unwrap_or_default().is_dir() {
         vec![trace_path]
     } else {
         load_batch_traces(&trace_path).0
@@ -60,9 +58,10 @@ pub fn load_block_traces_for_test() -> (Vec<String>, Vec<BlockTrace>) {
 }
 
 fn load_batch_traces(batch_dir: &str) -> (Vec<String>, Vec<BlockTrace>) {
-    let file_names: Vec<String> = glob(&format!("{batch_dir}/**/*.json"))
-        .unwrap()
-        .map(|p| p.unwrap().to_str().unwrap().to_string())
+    let file_names: Vec<String> = glob(&format!("{}/{}/**/*.json", batch_dir, "**"))
+        .unwrap_or_else(|_| vec![])
+        .filter_map(Result::ok)
+        .map(|p| p.to_str().unwrap().to_string())
         .collect();
     log::info!("test batch with {:?}", file_names);
     let mut names_and_traces = file_names
@@ -72,11 +71,11 @@ fn load_batch_traces(batch_dir: &str) -> (Vec<String>, Vec<BlockTrace>) {
             (
                 trace_path,
                 trace.clone(),
-                trace.header.number.unwrap().as_u64(),
+                trace.header.number.unwrap_or_default().as_u64(),
             )
         })
         .collect::<Vec<_>>();
-    names_and_traces.sort_by(|a, b| a.2.cmp(&b.2));
+    names_and_traces.sort_by_key(|&(_, _, num)| num);
     log::info!(
         "sorted: {:?}",
         names_and_traces
